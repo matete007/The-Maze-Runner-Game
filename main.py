@@ -182,8 +182,10 @@ key.animation_delay = 0.15
 #PLAYER ANIMATIONS
 player_walk = ['walking-thomas1.png', 'walking-thomas0.png']
 player_idle = ['stopped-thomas0.png', 'stopped-thomas1.png']
-player_jump = ['jumping-thomas1.png', 'jumping-thomas2.png', 'jumping-thomas3.png', 'jumping-thomas4.png', 
-               'jumping-thomas5.png', 'jumping-thomas6.png', 'jumping-thomas7.png']
+player_jump = ['jumping-thomas1.png', 'jumping-thomas2.png', 
+               'jumping-thomas3.png', 'jumping-thomas4.png', 
+               'jumping-thomas5.png', 'jumping-thomas6.png', 
+               'jumping-thomas7.png']
 
 player_walk_left = [img.replace('.png', '-left.png') for img in player_walk]
 player_idle_left = [img.replace('.png', '-left.png') for img in player_idle]
@@ -327,7 +329,8 @@ def load_level(level_number):
         p_4.topleft = (452, 170)
         p_4Rect = Rect(p_4.topleft[0], p_4.topleft[1], 33, 57)
 
-        platforms.extend([left_ground, right_ground, p_1Rect, p_2Rect, p_3Rect, p_4Rect])
+        platforms.extend([left_ground, right_ground, p_1Rect, 
+                          p_2Rect, p_3Rect, p_4Rect])
         platform_visuals.extend([p_1, p_2, p_3, p_4])
 
         monster = Actor(newt_walk[0])
