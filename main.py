@@ -1,24 +1,33 @@
 from pygame import Rect
 import pgzero
 import pgzrun
-import math
 from pgzero.builtins import Actor, keyboard
 
 TITLE = 'THE MAZE RUNNER GAME'
 WIDTH = 675
 HEIGHT = 422
 
+game_tittle = Actor('painel.png')
+game_tittle.center = (WIDTH / 2, HEIGHT / 2.5)
+
+play_btn = Actor('play-button.png')
+play_btn.center = (WIDTH / 2, (HEIGHT / 2) + 100)
+close_btn = Actor('close-button.png')
+close_btn.center = (WIDTH / 2, (HEIGHT / 2) + 150)
+sound_btn = Actor('sound-button-on.png')
+sound_btn.center = (50, 50)
+
+SOUND_ON = True
 GRAVITY = 9.8
 PLAYER_SPEED = 3
 JUMP_FORCE = -5
 COLLISION_TOLERANCE = 4
-GAME_STATE = 'playing'
+GAME_STATE = 'menu'
 HAS_KEY = False
 CURRENT_LEVEL = 1
 PLATFORM_SPEED = 1
 
 door = Actor("door.png")
-door.topleft = (600, 238)
 
 left_ground_height = 132
 left_ground_width = 106
@@ -28,6 +37,9 @@ right_ground_width = 116
 game_over_frames = ['game_over0.png', 'game_over1.png', 'game_over2.png', 'game_over3.png']
 game_over_animation = Actor(game_over_frames[0])
 game_over_animation.center = (WIDTH / 2, HEIGHT / 2)
+
+escaped = Actor('escaped.png')
+escaped.center = (WIDTH / 2, HEIGHT / 2)
 
 go_index = 0
 go_timer = 0
@@ -62,9 +74,40 @@ facing_right = True
 
 vellocityy = 1.0
 
-def on_mouse_move(pos):
-    x, y = pos
-    print(f"Mouse X: {x}, Y: {y}")
+newt_walk = ['infected_newt0.png', 'infected_newt1.png']
+newt_walk_left = ['infected_newt0-left.png', 'infected_newt1-left.png']
+ENEMY_SPEED = 1
+enemies = []
+
+def on_mouse_down(pos):
+    global GAME_STATE, CURRENT_LEVEL, sound_btn, SOUND_ON
+
+    if GAME_STATE == 'menu':
+        if play_btn.collidepoint(pos):
+            GAME_STATE = 'playing'
+            CURRENT_LEVEL = 1
+            load_level(CURRENT_LEVEL)
+        elif close_btn.collidepoint(pos):
+            raise SystemExit
+        elif sound_btn.collidepoint(pos):
+            SOUND_ON = not SOUND_ON
+            if SOUND_ON:
+                sound_btn.image = 'sound-button-on.png'
+                try:
+                    music.play('runboyrun_maze_runner_game.mp3')
+                except:
+                    pass
+            else:
+                sound_btn.image = 'sound-button-off.png'
+                music.stop()
+    elif GAME_STATE == 'victory' or GAME_STATE == 'game_over':
+        if play_btn.collidepoint(pos):
+            GAME_STATE = 'playing'
+            CURRENT_LEVEL = 1
+            load_level(CURRENT_LEVEL)
+        elif close_btn.collidepoint(pos):
+            raise SystemExit
+        pass
 
 def update_player(keyboard):
     global facing_right
@@ -139,7 +182,7 @@ def animate_key(dt):
         key.image = key_frames[key.frame_index]
 
 def load_level(level_number):
-    global platforms, platform_visuals, player, moving_platform_data, key, game_over_animation, go_index, go_timer, vellocityy
+    global platforms, platform_visuals, player, moving_platform_data, key, game_over_animation, go_index, go_timer, vellocityy, GAME_STATE
 
     game_over_animation.image = game_over_frames[0]
     go_index = 0
@@ -192,15 +235,78 @@ def load_level(level_number):
         platforms.extend([left_ground, right_ground, p1Rect, p2Rect, p3Rect, p4Rect, moving_platform_data, p5Rect, p6Rect, p7Rect])
         platform_visuals.extend([p1, p2, p3, p4, movingP, key, p5, p6, p7])
 
-        door.pos = (620, 238)
+        door.pos = (640, 271)
     
-    #elif level_number == 2:
+    elif level_number == 2:
+
+        p_1 = Actor("platafforms0.png")
+        p_1.topleft = (180, 292)
+        p_1Rect = Rect(p_1.topleft[0], p_1.topleft[1], 84, 21)
+        p_2 = Actor("platafforms1.png")
+        p_2.topleft = (316, 230)
+        p_2Rect = Rect(p_2.topleft[0], p_2.topleft[1], 33, 57)
+        p_3 = Actor("platafforms3.png")
+        p_3.topleft = (384, 230)
+        p_3Rect = Rect(p_3.topleft[0], p_3.topleft[1], 33, 18)
+        p_4 = Actor("platafforms1.png")
+        p_4.topleft = (452, 170)
+        p_4Rect = Rect(p_4.topleft[0], p_4.topleft[1], 33, 57)
+
+        platforms.extend([left_ground, right_ground, p_1Rect, p_2Rect, p_3Rect, p_4Rect])
+        platform_visuals.extend([p_1, p_2, p_3, p_4])
+
+        monster = Actor(newt_walk[0])
+        monster.topleft = (178, 292 - monster.height)
+        monsterRect = Rect(monster.topleft[0], monster.topleft[1], monster.width-15, monster.height-15)
+
+        monster_data = {
+            'visual': monster,
+            'rect': monsterRect,
+            'vx': ENEMY_SPEED,
+            'limit_left': 172,
+            'limit_right': 264,
+            'frames_right': newt_walk,
+            'frames_left': newt_walk_left,
+            'current_frame': newt_walk,
+            'index': 0,
+            'timer': 0,
+            'anim_speed': 0.15
+        }
+        enemies.append(monster_data)
+
+        door.pos = (640, 271)
+
+    else:
+        GAME_STATE = 'victory'
+
+def update_enemies(dt):
+    for e in enemies:
+        e_rect = e['rect']
+        e_visual = e['visual']
+        e_rect.x += e['vx']
+        if e['vx'] > 0:
+            e['current_frame'] = e['frames_right']
+        elif e['vx'] < 0:
+            e['current_frame'] = e['frames_left']
+        if e_rect.right > e['limit_right']:
+            e['vx'] = -ENEMY_SPEED
+        elif e_rect.left < e['limit_left']:
+            e['vx'] = ENEMY_SPEED
+        e['timer'] += dt
+        if e['timer'] >= e['anim_speed']:
+            e['timer'] = 0
+            e['index'] = (e['index'] + 1) % len(e['current_frame'])
+            e_visual.image = e['current_frame'][e['index']]
+        e_visual.topleft = e_rect.topleft
 
 on_ground = False
 
 def update(dt):
-    global vellocityy, on_ground, HAS_KEY, CURRENT_LEVEL, GAME_STATE
+    global vellocityy, on_ground, HAS_KEY, CURRENT_LEVEL, GAME_STATE, go_timer, go_index
     on_ground = False
+
+    if GAME_STATE == 'victory':
+        return
 
     if GAME_STATE == 'game_over':
         go_timer += dt
@@ -211,6 +317,7 @@ def update(dt):
         return
     if GAME_STATE == 'playing':
         update_platforms()
+        update_enemies(dt)
         animate_key(dt)
 
         if key.is_collectable:
@@ -282,6 +389,11 @@ def update(dt):
             if HAS_KEY:
                 CURRENT_LEVEL += 1
                 load_level(CURRENT_LEVEL)
+        
+        for e in enemies:
+            enemy_rect = e['rect']
+            if player.colliderect(enemy_rect):
+                GAME_STATE = 'game_over'
     
     if player.bottom > HEIGHT:
         GAME_STATE = 'game_over'
@@ -289,17 +401,33 @@ def update(dt):
 
 def draw():
     screen.clear()
+    if GAME_STATE == 'menu':
+        screen.blit('background_', (0,0))
+        game_tittle.draw()
+        play_btn.draw()
+        close_btn.draw()
+        sound_btn.draw()
     if GAME_STATE == 'playing':
         screen.blit('background_', (0,0))
         door.draw()
         for visual in platform_visuals:
             visual.draw()
+        for e in enemies:
+            e['visual'].draw()
         player.draw()
         if HAS_KEY:
             screen.blit('key.png', (10, 10))
     elif GAME_STATE == 'game_over':
         screen.blit('background_', (0,0))
         game_over_animation.draw()
+    elif GAME_STATE == 'victory':
+        screen.blit('background_', (0,0))
+        play_btn.center = (WIDTH / 2, (HEIGHT / 2) + 50)
+        close_btn.center = (WIDTH / 2, (HEIGHT / 2) + 109)
+        escaped.draw()
 
-load_level(1)
+if SOUND_ON:
+    music.play('runboyrun_maze_runner_game.mp3')
+    music.set_volume(0.5)
+
 pgzrun.go()
