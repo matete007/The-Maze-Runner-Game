@@ -26,6 +26,126 @@ GAME_STATE = 'menu'
 HAS_KEY = False
 CURRENT_LEVEL = 1
 PLATFORM_SPEED = 1
+MAX_DT = 0.05
+
+class Player(Actor):
+    def __init__(self, image):
+        super().__init__(player_idle[0])
+
+        self.pos = (50, 311 - self.height * 1.5)
+
+        self.animations = {
+            "idle": player_idle,
+            "walk": player_walk,
+            "jump": player_jump,
+
+            "idle_left": player_idle_left,
+            "walk_left": player_walk_left,
+            "jump_left": player_jump_left
+        }
+
+        self.current_animation = "idle"
+        self.animation_delay = 0.25
+        self.animation_timer = 0
+        self.index = 0
+
+        self.vellocityy = 0
+        self.on_ground = False
+        self.facing_right = True
+        self.speed = PLAYER_SPEED
+
+        self.y_previous = self.y 
+        self.bottom_previous = self.bottom
+
+    def update_player(self, keyboard):
+        is_moving = False
+        if keyboard.left:
+            self.x -= self.speed
+            self.facing_right = False
+            is_moving = True
+        if keyboard.right:
+            self.x += self.speed
+            self.facing_right = True
+            is_moving = True
+        half = self.width / 2
+
+        if self.x < half:
+            self.x = half
+        elif self.x > WIDTH - half:
+            self.x = WIDTH - half
+            
+        return is_moving
+        
+    def apply_gravity(self, dt):
+        self.y_previous = self.y 
+        self.bottom_previous = self.bottom
+        self.vellocityy += GRAVITY * dt
+        self.y += self.vellocityy
+        
+    def collisions(self, platforms):
+        self.on_ground = False
+        for p in platforms:
+            if isinstance(p, dict):
+                p_rect = p['rect']
+            else:
+                p_rect = p
+            if self.colliderect(p_rect):
+                if self.vellocityy > 0:
+                    if self.bottom_previous <= p_rect.top + COLLISION_TOLERANCE:
+                        self.bottom = p_rect.top
+                        self.vellocityy = 0
+                        self.on_ground = True
+                        if isinstance(p, dict) and 'vx' in p:
+                            self.x += p['vx']
+                elif self.vellocityy < 0:
+                    if self.y_previous >= p_rect.bottom: 
+                        self.vellocityy = 0
+        
+    def jump(self, dt, is_moving):
+        if self.on_ground:
+            self.vellocityy = JUMP_FORCE
+            self.on_ground = False
+        
+    def set_image_midbottom(self, image):
+        mb = self.midbottom
+        self.image = image
+        self.midbottom = mb
+        
+    def animate(self, dt, is_moving):
+        suffix = ""
+        if self.facing_right:
+            suffix = ""
+        else:
+            suffix = "_left"
+
+        target_anim = "idle" + suffix
+        if not self.on_ground:
+            target_anim = "jump" + suffix
+        elif is_moving:
+            target_anim = "walk" + suffix
+        
+        if target_anim != self.current_animation:
+            self.current_animation = target_anim
+            self.index = 0
+            self.animation_timer = 0
+            self.set_image_midbottom(self.animations[target_anim][0])
+            return
+
+        self.animation_timer += dt
+
+        if self.animation_timer >= self.animation_delay:
+            self.animation_timer = 0
+            self.index = (self.index + 1) % len(self.animations[target_anim])
+            self.set_image_midbottom(self.animations[target_anim][self.index])
+        
+    def update(self, dt, platforms, keyboard):
+        self.apply_gravity(dt)
+        self.collisions(platforms)
+        is_moving = self.update_player(keyboard)
+        if keyboard.up:
+            self.jump(dt, is_moving)
+        self.animate(dt, is_moving)
+
 
 door = Actor("door.png")
 
@@ -36,7 +156,7 @@ right_ground_width = 116
 
 game_over_frames = ['game_over0.png', 'game_over1.png', 'game_over2.png', 'game_over3.png']
 game_over_animation = Actor(game_over_frames[0])
-game_over_animation.center = (WIDTH / 2, HEIGHT / 2)
+game_over_animation.center = (WIDTH / 2, (HEIGHT / 2) - 25)
 
 escaped = Actor('escaped.png')
 escaped.center = (WIDTH / 2, HEIGHT / 2)
@@ -62,17 +182,15 @@ key.animation_delay = 0.15
 #PLAYER ANIMATIONS
 player_walk = ['walking-thomas1.png', 'walking-thomas0.png']
 player_idle = ['stopped-thomas0.png', 'stopped-thomas1.png']
-player_jump = ['jumping-thomas1.png', 'jumping-thomas2.png', 'jumping-thomas3.png', 'jumping-thomas4.png', 'jumping-thomas5.png', 'jumping-thomas6.png', 'jumping-thomas7.png']
+player_jump = ['jumping-thomas1.png', 'jumping-thomas2.png', 'jumping-thomas3.png', 'jumping-thomas4.png', 
+               'jumping-thomas5.png', 'jumping-thomas6.png', 'jumping-thomas7.png']
 
-player_walk_left = ['walking-thomas1-left.png', 'walking-thomas0-left.png']
-player_idle_left = ['stopped-thomas0-left.png', 'stopped-thomas1-left.png']
-player_jump_left = ['jumping-thomas1-left.png', 'jumping-thomas2-left.png', 'jumping-thomas3-left.png', 'jumping-thomas4-left.png', 'jumping-thomas5-left.png', 'jumping-thomas6-left.png', 'jumping-thomas7-left.png']
+player_walk_left = [img.replace('.png', '-left.png') for img in player_walk]
+player_idle_left = [img.replace('.png', '-left.png') for img in player_idle]
+player_jump_left = [img.replace('.png', '-left.png') for img in player_jump]
 
-player = Actor(player_idle[0])
+player = Player(player_idle[0])
 player.x_previous = player.x
-facing_right = True
-
-vellocityy = 1.0
 
 newt_walk = ['infected_newt0.png', 'infected_newt1.png']
 newt_walk_left = ['infected_newt0-left.png', 'infected_newt1-left.png']
@@ -109,15 +227,6 @@ def on_mouse_down(pos):
             raise SystemExit
         pass
 
-def update_player(keyboard):
-    global facing_right
-    if keyboard.left:
-        player.x -= 3
-        facing_right = False
-    if keyboard.right:
-        player.x += 3
-        facing_right = True
-
 platforms = []
 platform_visuals = []
 
@@ -133,43 +242,6 @@ def update_platforms():
                 pt['vx'] = PLATFORM_SPEED
             p_visual.topleft = p_rect.topleft
 
-def set_image_midbottom(image):
-    mb = player.midbottom
-    player.image = image
-    player.midbottom = mb
-        
-animations = {
-    "idle": player_idle,
-    "walk": player_walk,
-    "jump": player_jump,
-
-    "idle_left": player_idle_left,
-    "walk_left": player_walk_left,
-    "jump_left": player_jump_left
-}
-current_animation = "idle"
-animation_delay = 0.25
-animation_timer = 0
-index = 0
-MAX_DT = 0.05
-
-def animate(dt, animation):
-    global index, animation_timer, current_animation
-
-    if animation != current_animation:
-        current_animation = animation
-        index = 0
-        animation_timer = 0
-        set_image_midbottom(animations[animation][0])
-        return
-
-    animation_timer += dt
-
-    if animation_timer >= animation_delay:
-        animation_timer = 0
-        index = (index + 1) % len(animations[animation])
-        set_image_midbottom(animations[animation][index])
-
 def animate_key(dt):
     if not key.is_collectable:
         return
@@ -182,7 +254,8 @@ def animate_key(dt):
         key.image = key_frames[key.frame_index]
 
 def load_level(level_number):
-    global platforms, platform_visuals, player, moving_platform_data, key, game_over_animation, go_index, go_timer, vellocityy, GAME_STATE
+    global platforms, platform_visuals, player, moving_platform_data, key
+    global game_over_animation, go_index, go_timer, GAME_STATE, enemies
 
     game_over_animation.image = game_over_frames[0]
     go_index = 0
@@ -190,8 +263,9 @@ def load_level(level_number):
     
     platforms.clear()
     platform_visuals.clear()
+    enemies.clear()
     player.pos = (50, 311 - player.height * 1.5)
-    vellocityy = 1
+    player.vellocityy = 1
 
     if level_number == 1:
         p1 = Actor("platafforms2.png")
@@ -232,7 +306,8 @@ def load_level(level_number):
         key.is_collectable = True
         key.is_on_platform = True
 
-        platforms.extend([left_ground, right_ground, p1Rect, p2Rect, p3Rect, p4Rect, moving_platform_data, p5Rect, p6Rect, p7Rect])
+        platforms.extend([left_ground, right_ground, p1Rect, p2Rect, p3Rect, 
+                          p4Rect, moving_platform_data, p5Rect, p6Rect, p7Rect])
         platform_visuals.extend([p1, p2, p3, p4, movingP, key, p5, p6, p7])
 
         door.pos = (640, 271)
@@ -257,7 +332,8 @@ def load_level(level_number):
 
         monster = Actor(newt_walk[0])
         monster.topleft = (178, 292 - monster.height)
-        monsterRect = Rect(monster.topleft[0], monster.topleft[1], monster.width-15, monster.height-15)
+        monsterRect = Rect(monster.topleft[0], monster.topleft[1], 
+                           monster.width-15, monster.height-15)
 
         monster_data = {
             'visual': monster,
@@ -299,11 +375,8 @@ def update_enemies(dt):
             e_visual.image = e['current_frame'][e['index']]
         e_visual.topleft = e_rect.topleft
 
-on_ground = False
-
 def update(dt):
-    global vellocityy, on_ground, HAS_KEY, CURRENT_LEVEL, GAME_STATE, go_timer, go_index
-    on_ground = False
+    global HAS_KEY, CURRENT_LEVEL, GAME_STATE, go_timer, go_index
 
     if GAME_STATE == 'victory':
         return
@@ -315,7 +388,11 @@ def update(dt):
             go_index = (go_index + 1) % len(game_over_frames)
             game_over_animation.image = game_over_frames[go_index]
         return
+    
     if GAME_STATE == 'playing':
+        if dt > MAX_DT:
+            dt = MAX_DT
+
         update_platforms()
         update_enemies(dt)
         animate_key(dt)
@@ -329,61 +406,7 @@ def update(dt):
                 HAS_KEY = True
                 key.pos = (-100, -100)
 
-        player.y_previous = player.y 
-        player.bottom_previous = player.bottom
-
-        if dt > MAX_DT:
-            dt = MAX_DT
-
-        if not on_ground:
-            vellocityy += GRAVITY * dt
-        player.y += vellocityy
-
-        for p in platforms:
-            if isinstance(p, dict):
-                p_rect = p['rect']
-            else:
-                p_rect = p
-            if player.colliderect(p_rect):
-                if vellocityy > 0:
-                    if player.bottom_previous <= p_rect.top:
-                        player.bottom = p_rect.top
-                        vellocityy = 0
-                        on_ground = True
-                        if on_ground and isinstance(p, dict) and 'vx' in p:
-                            player.x += p['vx']
-                elif vellocityy < 0:
-                    if player.y_previous >= p_rect.bottom: 
-                        vellocityy = 0
-
-        if keyboard.up and on_ground:
-            vellocityy = JUMP_FORCE
-            on_ground = False
-
-        moving = keyboard.left or keyboard.right
-        if moving:
-            update_player(keyboard)
-        
-        if facing_right:
-            sufix = ""
-        else:
-            sufix = "_left"
-
-        if not on_ground:
-            animate(dt, "jump" + sufix)
-        elif moving:
-            animate(dt, "walk" + sufix)
-        else:
-            animate(dt, "idle" + sufix)
-
-        half = player.width / 2
-
-        if player.x < half:
-            player.x = half
-        elif player.x > WIDTH - half:
-            player.x = WIDTH - half
-        
-        player.x_previous = player.x
+        player.update(dt, platforms, keyboard)
 
         if player.colliderect(door):
             if HAS_KEY:
@@ -420,8 +443,14 @@ def draw():
     elif GAME_STATE == 'game_over':
         screen.blit('background_', (0,0))
         game_over_animation.draw()
+        play_btn.draw()
+        close_btn.draw()
+        play_btn.center = (WIDTH / 2, (HEIGHT / 2) + 70)
+        close_btn.center = (WIDTH / 2, (HEIGHT / 2) + 115)
     elif GAME_STATE == 'victory':
         screen.blit('background_', (0,0))
+        play_btn.draw()
+        close_btn.draw()
         play_btn.center = (WIDTH / 2, (HEIGHT / 2) + 50)
         close_btn.center = (WIDTH / 2, (HEIGHT / 2) + 109)
         escaped.draw()
